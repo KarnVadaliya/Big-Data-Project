@@ -1,7 +1,6 @@
 package com.myproject.bigdata.service;
 
 import com.myproject.bigdata.controller.PlanController;
-import com.myproject.bigdata.exception.InvalidInputException;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
@@ -23,9 +22,17 @@ public class PlanService {
         return this.jedisPool;
     }
 
+    //Saving the plan
+    public String savePlan(JSONObject jsonObject){
+        String objectKey = (String) jsonObject.get("objectId");
+        Jedis jedis = this.getJedisPool().getResource();
+        jedis.set(objectKey, jsonObject.toString());
+        jedis.close();
+        return objectKey;
+    }
 
-    public boolean checkIfPlanExists(String objectKey){
-
+    //Checking if plan already exists
+    public boolean checkPlanExists(String objectKey){
         Jedis jedis = this.getJedisPool().getResource();
         String jsonString = jedis.get(objectKey);
         jedis.close();
@@ -36,40 +43,25 @@ public class PlanService {
         }
     }
 
-    public String savePlan(JSONObject jsonObject){
-
-        // Save the Object in Redis
-        String objectKey = (String) jsonObject.get("objectId");
-        Jedis jedis = this.getJedisPool().getResource();
-        jedis.set(objectKey, jsonObject.toString());
-        jedis.close();
-
-        return objectKey;
-
-    }
-
+    //Getting the plan
     public JSONObject getPlan(String objectKey) {
         JedisPool jedisPool = new JedisPool();
         Jedis jedis =  jedisPool.getResource();
-
         String jsonString = jedis.get(objectKey);
         jedis.close();
         if (jsonString == null || jsonString.isEmpty()) {
             return null;
         }
         JSONObject jsonObject = new JSONObject(jsonString);
-
         return  jsonObject;
     }
 
+    // Deleting the plan
     public boolean deletePlan(String objectKey){
-
         Jedis jedis =  this.getJedisPool().getResource();
         jedis.del(objectKey);
         jedis.close();
-
         return true;
-
     }
 
 }

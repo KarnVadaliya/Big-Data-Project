@@ -1,9 +1,6 @@
 package com.myproject.bigdata.controller;
 
 import com.myproject.bigdata.beans.EtagManager;
-import com.myproject.bigdata.exception.InvalidInputException;
-import com.myproject.bigdata.exception.PlanAlreadyPresentException;
-import com.myproject.bigdata.exception.PlanNotFoundException;
 import com.myproject.bigdata.service.PlanService;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
@@ -32,6 +29,7 @@ public class PlanController {
     @RequestMapping(method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE, value = "/plan")
     public ResponseEntity createPlan(@RequestBody String jsonData) throws URISyntaxException {
 
+        String responseBody,message;
         JSONObject jsonPlan = new JSONObject(new JSONTokener(jsonData));
 
         JSONObject jsonSchema = new JSONObject(new JSONTokener(PlanController.class.getResourceAsStream("/planSchema.json")));
@@ -42,12 +40,15 @@ public class PlanController {
             planSchema.validate(jsonPlan);
         } catch (ValidationException e){
             e.getCausingExceptions().stream().map(ValidationException::getMessage).forEach(System.out::println);
-            throw new InvalidInputException("Invalid Input! Error: " + e.getMessage());
-
+            message = "Invalid Input! Error: "+e.getAllMessages();
+            responseBody = "{\n" + "\t\"message\": \"" + message + "\"\n" + "}";
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(responseBody);
         }
 
-        if(this.planService.checkIfPlanExists((String) jsonPlan.get("objectId"))){
-            throw new PlanAlreadyPresentException("Plan has already present!!");
+        if(this.planService.checkPlanExists((String) jsonPlan.get("objectId"))){
+            message = "Plan Already Exists !";
+            responseBody = "{\n" + "\t\"message\": \"" + message + "\"\n" + "}";
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(responseBody);
         }
 
         String objectID = this.planService.savePlan(jsonPlan);
@@ -55,8 +56,8 @@ public class PlanController {
         JSONObject jsonObject = this.planService.getPlan(objectID);
         String etag = etagManager.getETag(jsonObject);
 
-        String message = "Plan Created Successfully!!";
-        String responseBody = "{\n" +
+        message = "Plan Created Successfully!!";
+        responseBody = "{\n" +
                 "\t\"objectId\": \"" + objectID + "\"\n" +
                 "\t\"message\": \"" + message + "\"\n" +
                 "}";
@@ -66,8 +67,11 @@ public class PlanController {
     @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE, value = "/plan/{objectID}")
     public ResponseEntity getPlan(@PathVariable String objectID, @RequestHeader HttpHeaders requestHeaders){
 
-        if(!this.planService.checkIfPlanExists(objectID)){
-            throw new PlanNotFoundException("Plan not found!!");
+        String message,responseBody;
+        if(!this.planService.checkPlanExists(objectID)){
+            message = "Plan Not Found !";
+            responseBody = "{\n" + "\t\"message\": \"" + message + "\"\n" + "}";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
         }
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -76,28 +80,26 @@ public class PlanController {
         String etag = etagManager.getETag(jsonObject);
         headers.setETag(etag);
 
-
         if(!etagManager.verifyETag(jsonObject,requestHeaders.getIfNoneMatch()))
             return new ResponseEntity<>(jsonObject.toMap(), headers, HttpStatus.OK);
         else
-            return new ResponseEntity<>("", headers, HttpStatus.NOT_MODIFIED);
+            return new ResponseEntity<>(null, headers, HttpStatus.NOT_MODIFIED);
 
-
-       // return ResponseEntity.ok().body(jsonObject.toString());
     }
 
     @RequestMapping(method =  RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE, value = "/plan/{objectID}")
     public ResponseEntity deletePlan(@PathVariable String objectID){
 
-        if(!this.planService.checkIfPlanExists(objectID)){
-            throw new PlanNotFoundException("Plan not found!!");
+        String message,responseBody;
+        if(!this.planService.checkPlanExists(objectID)){
+            message = "Plan Not Found !";
+            responseBody = "{\n" + "\t\"message\": \"" + message + "\"\n" + "}";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
         }
-        JSONObject jsonObject = this.planService.getPlan(objectID);
-        String etag = etagManager.getETag(jsonObject);
 
         this.planService.deletePlan(objectID);
 
-        return ResponseEntity.noContent().eTag(etag).build();
+        return ResponseEntity.noContent().build();
     }
 
 }
